@@ -1,42 +1,35 @@
-# Xmip repository template — Rust
+# xmip-core-library-sql
 
-This repository is the starter snapshot for a Rust Xmip module repository. It is
-not an Xmip runtime capability.
+SQL for Xmip, one copy for every domain that speaks it: the SQL transports
+and their far ends, the archives in a SQL table and the SQL script archive,
+and the SQL contract. What a server's wire is — its protocol, its login, the
+URI scheme a Location opens with — stays with the technology that speaks it;
+what a capability makes of SQL — the archive's row and receipt, the
+transport's payload column and acknowledgement, the contract's classes of
+verbs — stays with the capability.
 
-For a .NET 11 surface — the CLI, the PowerShell module, the MAUI desktop GUI or
-the Blazor web GUI — use
-[xmip-template-dotnet](https://github.com/IlleNilsson/xmip-template-dotnet)
-instead. ADR-0014: every user-interfacing module is .NET 11, and
-`xmip-core-abi` is the exception.
+| Item | What it is |
+| --- | --- |
+| `Delimiter` | SQL's delimited text — a `'…'` literal, an `"…"`, `[…]` or backtick identifier — written with the closing delimiter doubled and read back with the doubling undone (ISO/IEC 9075, 5.3 and 5.4) |
+| `Verb` | The keyword a statement opens with, which names its kind: read from a keyword or from a statement's first word. The SQL contract holds a script to a set of them; a SQL far end answers a statement by its verb |
+| `Literal` | One literal read back from a statement: the bytes a binary literal names, or a string's text with its escapes undone |
+| `Dialect` | What one server writes its own way: the identifier delimiter, what a bare identifier takes, the first parameter marker, the string literal, the binary literal and how a binary column comes back, and how an INSERT answers its new row's id (`Returning`). Through it, one INSERT is written and taken apart, a table is quoted segment by segment, and a parameter is bound in by text where it is a parameter and nowhere else (`Dialect::bound`) |
+| `STANDARD` | ISO SQL: `"…"` identifiers, `'…'` literals, bytes as `X'…'`, `?` — the SQL script archive's script |
+| `TSQL` | SQL Server: `[…]` identifiers, `N'…'` literals, bytes as `0x…`, `@P1`, `OUTPUT INSERTED` |
+| `POSTGRESQL` | `"…"` identifiers, `'…'` literals with backslashes literal, bytes in the bytea hex form `\x…`, `$1`, `RETURNING` |
+| `MARIADB` | Backtick identifiers, `'…'` literals with the backslash escapes the server reads, bytes as `X'…'` and back through `CONCAT('0x', HEX(…))`, `?`, the id asked for after the INSERT |
+| `SQLITE` | ISO's literals, a BLOB back through `hex(…)`, `?`, `RETURNING` |
 
-A repository generated from this template has independent history. Later
-template changes do not automatically rewrite generated repositories.
+Until 2026-09-24 the SQL transports, the SQL script archive and the SQL
+contract each wrote the doubling rule themselves, and two far ends read an
+identifier's doubled delimiter as its end. Until 2026-10-12 the transport capability and the
+archive capability each had a dialect of their own, every SQL technology
+filled both, and the transport and the contract each read a statement's verb
+their own way. The owner, 2026-10-12: *Well I guess that SQL should live
+under a more common repo/module if it is shared between domains?* and *Go
+ahead, it does not fit under archive* (ADR-0044, amendment 2026-10-12).
 
-## Before implementation
+Xmip ships nothing for Oracle (ADR-0011, amendment 2026-10-12): there is no
+PL/SQL dialect here, and a provider who wants one writes it.
 
-Follow [TEMPLATE_SETUP.md](TEMPLATE_SETUP.md), and item 3 first. The new
-repository must be classified and declared in the authoritative Xmip
-architecture manifest before its responsibility or dependencies are treated as
-accepted architecture.
-
-## Toolchain
-
-`rust-toolchain.toml` pins the toolchain for the whole estate. rustup reads it
-automatically and installs what is missing. Do not change it here — raising it
-is one deliberate change across every repository.
-
-## Shared governance
-
-Repository-specific licensing remains explicit in [LICENSE](LICENSE).
-Contribution, security, support, issue and pull-request defaults are inherited
-from [IlleNilsson/.github](https://github.com/IlleNilsson/.github) when they are
-not overridden locally.
-
-## Verification
-
-The included workflow is manual-only and calls the versioned shared workflow at
-`IlleNilsson/.github@v1`. It does not run on pushes, pull requests or a
-schedule.
-
-The ordered stages are formatting, semantic analysis, linting, compilation and
-linking, and test execution. Packaging and publishing are not configured.
+`architecture.toml` carries the maturity.

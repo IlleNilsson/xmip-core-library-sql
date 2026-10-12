@@ -10,16 +10,21 @@
 [workspace]
 
 [package]
-name = "xmip-template-rust"
+name = "xmip-core-library-sql"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/IlleNilsson/xmip-template-rust"
-description = "Starter template for a Rust Xmip module repository."
+repository = "https://github.com/IlleNilsson/xmip-core-library-sql"
+description = "SQL for Xmip: delimited text, a statement's verb, literals, one INSERT, a bound parameter, and the dialects ISO SQL, T-SQL, PostgreSQL, MariaDB and SQLite."
 publish = false
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+# The estate's encoding primitives: the character reader a delimited run is
+# read with, the error it is refused with, and hex for a binary literal.
+codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 
 [lints.rust]
 # forbid, not deny: a module has no business writing unsafe. The one exception
