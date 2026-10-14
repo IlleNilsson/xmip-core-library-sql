@@ -15,7 +15,7 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/IlleNilsson/xmip-core-library-sql"
-description = "SQL for Xmip: delimited text, a statement's verb, literals, one INSERT, a bound parameter, and the dialects ISO SQL, T-SQL, PostgreSQL, MariaDB and SQLite."
+description = "SQL for Xmip: delimited text, a statement's verb, literals, one INSERT, a bound parameter, and the dialects ISO SQL, T-SQL, PostgreSQL, MariaDB, Oracle Database, IBM DB2 and SQLite."
 publish = false
 
 [lib]

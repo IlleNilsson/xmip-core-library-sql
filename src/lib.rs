@@ -17,6 +17,8 @@
 //!   tsql.rs         TSQL: SQL Server
 //!   postgresql.rs   POSTGRESQL
 //!   mariadb.rs      MARIADB
+//!   oracle.rs       ORACLE: Oracle Database
+//!   db2.rs          DB2: IBM DB2
 //!   sqlite.rs       SQLITE
 //! ```
 //!
@@ -26,10 +28,12 @@
 //! setting and acknowledgement, the contract's classes of verbs (ADR-0044,
 //! amendment 2026-10-12).
 
+mod db2;
 mod delimiter;
 mod dialect;
 mod literal;
 mod mariadb;
+mod oracle;
 mod parameter;
 mod postgresql;
 mod sqlite;
@@ -37,10 +41,12 @@ mod standard;
 mod tsql;
 mod verb;
 
+pub use db2::DB2;
 pub use delimiter::Delimiter;
 pub use dialect::{Dialect, Returning};
 pub use literal::Literal;
 pub use mariadb::MARIADB;
+pub use oracle::ORACLE;
 pub use postgresql::POSTGRESQL;
 pub use sqlite::SQLITE;
 pub use standard::STANDARD;

@@ -9,9 +9,10 @@
 //! each had a dialect of their own, and every SQL technology filled both.
 //!
 //! The dialects Xmip speaks are this crate's constants: [`crate::STANDARD`],
-//! [`crate::TSQL`], [`crate::POSTGRESQL`], [`crate::MARIADB`] and
-//! [`crate::SQLITE`]. What a server's wire is — its protocol, its login,
-//! its URI scheme — stays with the technology that speaks it.
+//! [`crate::TSQL`], [`crate::POSTGRESQL`], [`crate::MARIADB`],
+//! [`crate::ORACLE`], [`crate::DB2`] and [`crate::SQLITE`]. What a server's
+//! wire is — its protocol, its login, its URI scheme — stays with the
+//! technology that speaks it.
 
 use crate::delimiter::Delimiter;
 use crate::literal::Literal;

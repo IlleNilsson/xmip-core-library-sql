@@ -17,7 +17,9 @@ verbs — stays with the capability.
 | `STANDARD` | ISO SQL: `"…"` identifiers, `'…'` literals, bytes as `X'…'`, `?` — the SQL script archive's script |
 | `TSQL` | SQL Server: `[…]` identifiers, `N'…'` literals, bytes as `0x…`, `@P1`, `OUTPUT INSERTED` |
 | `POSTGRESQL` | `"…"` identifiers, `'…'` literals with backslashes literal, bytes in the bytea hex form `\x…`, `$1`, `RETURNING` |
-| `MARIADB` | Backtick identifiers, `'…'` literals with the backslash escapes the server reads, bytes as `X'…'` and back through `CONCAT('0x', HEX(…))`, `?`, the id asked for after the INSERT |
+| `MARIADB` | Backtick identifiers, `'…'` literals with the backslash escapes the server reads, bytes as `X'…'` and back through `CONCAT('0x', HEX(…))`, `?`, the id asked for after the INSERT. The SQL of the mariadb transport, and of the mysql transport, which MySQL reads the same; MySQL has no dialect of its own here until it writes something differently |
+| `ORACLE` | Oracle Database: `"…"` identifiers, `'…'` literals with backslashes literal, bytes as `HEXTORAW('…')` and back through `RAWTOHEX(…)`, `:1`, the id asked for after the INSERT. The SQL of the oracle transport; never a Storage server's |
+| `DB2` | IBM DB2: `"…"` identifiers, their case kept, `'…'` literals with the quote doubled, bytes as `BX'…'` and back through `HEX(…)`, a value over a constant's 32 672 bytes as `CLOB(…) \|\| CLOB(…)` or `BLOB(BX'…') \|\| …`, `?`, the id asked for after the INSERT. The SQL of the db2 transport; never a Storage server's |
 | `SQLITE` | ISO's literals, a BLOB back through `hex(…)`, `?`, `RETURNING` |
 
 Until 2026-09-24 the SQL transports, the SQL script archive and the SQL
@@ -29,7 +31,9 @@ their own way. The owner, 2026-10-12: *Well I guess that SQL should live
 under a more common repo/module if it is shared between domains?* and *Go
 ahead, it does not fit under archive* (ADR-0044, amendment 2026-10-12).
 
-Xmip ships nothing for Oracle (ADR-0011, amendment 2026-10-12): there is no
-PL/SQL dialect here, and a provider who wants one writes it.
+Oracle is a transport's SQL and nothing more (the owner, 2026-10-14: *we do
+not want Oracle in the core, foundation of Xmip ... As a transport we shall
+have MySQL and OracleDB and IBM DB2*): `ORACLE` writes plain SQL, never
+PL/SQL, and no Storage server speaks it.
 
 `architecture.toml` carries the maturity.
