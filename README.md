@@ -36,4 +36,4 @@ not want Oracle in the core, foundation of Xmip ... As a transport we shall
 have MySQL and OracleDB and IBM DB2*): `ORACLE` writes plain SQL, never
 PL/SQL, and no Storage server speaks it.
 
-`architecture.toml` carries the maturity.
+`architecture.xmip` carries the maturity.
