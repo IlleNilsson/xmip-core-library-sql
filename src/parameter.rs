@@ -5,7 +5,8 @@
 //!
 //! Where a literal ends is the dialect's to say, so it is read by the
 //! dialect's own literal reader — a `MariaDB` `'it\'s ?'` is one literal,
-//! not one that ends after the backslash — and a comment, `--` and the
+//! not one that ends after the backslash, nor is a `PostgreSQL` `E'…'` or
+//! `$$…$$` or an Oracle `q'[…]'` — and a comment, `--` and the
 //! dialect's other line comments or `/* … */`, binds nothing. A literal,
 //! quoted identifier or comment that never closes keeps the rest of the
 //! statement as written: nothing is bound where the server reads text.
@@ -21,10 +22,14 @@ impl Dialect {
     pub fn bound(&self, statement: &str, literal: &str) -> String {
         let mut written = String::with_capacity(statement.len() + literal.len());
         let mut rest = statement;
+        // Whether the text so far ends inside a word: a literal's prefix
+        // (`E'`, `q'`, `$$`) opens one only at a word's start.
+        let mut word = false;
         while let Some(next) = rest.chars().next() {
-            if let Some(after) = self.unbound(rest) {
+            if let Some(after) = self.unbound(rest, word) {
                 written.push_str(&rest[..rest.len() - after.len()]);
                 rest = after;
+                word = false;
                 continue;
             }
             if let Some(after) = rest.strip_prefix(self.marker)
@@ -32,18 +37,22 @@ impl Dialect {
             {
                 written.push_str(literal);
                 rest = after;
+                word = false;
                 continue;
             }
             written.push(next);
             rest = &rest[next.len_utf8()..];
+            word = next.is_alphanumeric() || matches!(next, '_' | '$');
         }
         written
     }
 
     /// What follows the run `rest` opens with where nothing is bound — a
     /// comment, a quoted identifier, a literal — and `""` where that run
-    /// never closes; `None` where `rest` opens with none.
-    fn unbound<'a>(&self, rest: &'a str) -> Option<&'a str> {
+    /// never closes or its literal is refused; `None` where `rest` opens
+    /// with none. A quote always opens a literal; a prefix only where `word`
+    /// says the text is not inside a word.
+    fn unbound<'a>(&self, rest: &'a str, word: bool) -> Option<&'a str> {
         if self.line_comments.iter().any(|open| rest.starts_with(open)) {
             return Some(rest.find('\n').map_or("", |end| &rest[end..]));
         }
@@ -55,12 +64,9 @@ impl Dialect {
             let read = self.identifier.unquote_prefix(rest);
             return Some(read.map_or("", |(_, after)| after));
         }
-        match next {
-            '\'' => Some(self.read_literal(rest).map_or("", |(_, after)| after)),
-            // A string where the dialect reads one; an identifier is read above.
-            '"' => self.read_literal(rest).map(|(_, after)| after),
-            _ => None,
-        }
+        let quoted = matches!(next, '\'' | '"');
+        ((quoted || !word) && (self.opens)(rest))
+            .then(|| self.read_literal(rest).map_or("", |(_, after)| after))
     }
 }
 

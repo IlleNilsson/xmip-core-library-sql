@@ -30,6 +30,7 @@ pub const DB2: Dialect = Dialect {
     text,
     bytes,
     literal,
+    opens: standard::opens,
     binary_column,
     binary,
     returning: Returning::Separately,

@@ -18,10 +18,17 @@ pub const STANDARD: Dialect = Dialect {
     text,
     bytes,
     literal,
+    opens,
     binary_column: str::to_string,
     binary,
     returning: Returning::Separately,
 };
+
+/// Whether `rest` opens a literal: a single quote, the one delimiter every
+/// dialect's string literal is read between.
+pub(crate) fn opens(rest: &str) -> bool {
+    rest.starts_with('\'')
+}
 
 /// `text` between single quotes, every quote doubled.
 pub(crate) fn text(text: &str) -> String {

@@ -8,6 +8,14 @@
 //! the bytes; a SELECT spells a RAW out with `RAWTOHEX(…)` and the answer
 //! is bare upper-case hex. `:1` for a parameter; an INSERT answers its
 //! new row's id only into a bind, so the id is asked for after it.
+//!
+//! Two more literals are read, never written: the national `N'…'`, quoted
+//! as `'…'` is, and the alternative quoting `q'[…]'`, `nq'[…]'` in any case,
+//! taken as written up to its closing delimiter and a quote — `]`, `}`,
+//! `>` or `)` for an opening bracket, otherwise the opening character
+//! itself (Oracle Database SQL Language Reference, *Text Literals*). Read
+//! as a plain literal, `q'[it's :1]'` ended after `it` and the `:1` in its
+//! text was bound.
 
 use codec::hex;
 
@@ -25,6 +33,7 @@ pub const ORACLE: Dialect = Dialect {
     text: standard::text,
     bytes,
     literal,
+    opens,
     binary_column,
     binary,
     returning: Returning::Separately,
@@ -49,8 +58,14 @@ fn binary(text: &str) -> Option<Vec<u8>> {
     hex::decode(text).ok()
 }
 
-/// One literal — `HEXTORAW('…')`, in any case, or `'…'` — and what
-/// follows it.
+/// Whether `rest` opens a literal: `'`, `N'`, or `q'` and `nq'` in any
+/// case.
+fn opens(rest: &str) -> bool {
+    standard::opens(rest) || national(rest).is_some() || alternative(rest).is_some()
+}
+
+/// One literal — `HEXTORAW('…')`, `q'[…]'` or `nq'[…]'`, `N'…'` or `'…'`,
+/// each prefix in any case — and what follows it.
 fn literal(rest: &str) -> Option<(Literal, &str)> {
     let head = rest.get(..HEXTORAW.len());
     if head.is_some_and(|head| head.eq_ignore_ascii_case(HEXTORAW)) {
@@ -59,8 +74,50 @@ fn literal(rest: &str) -> Option<(Literal, &str)> {
         let after = after.trim_start().strip_prefix(')')?;
         return Some((Literal::Bytes(binary(&digits)?), after));
     }
-    let (text, after) = Delimiter::STRING.unquote_prefix(rest).ok()?;
+    if let Some(quoted) = alternative(rest) {
+        let (text, after) = alternatively(quoted)?;
+        return Some((Literal::Text(text), after));
+    }
+    let quoted = national(rest).unwrap_or(rest);
+    let (text, after) = Delimiter::STRING.unquote_prefix(quoted).ok()?;
     Some((Literal::Text(text), after))
+}
+
+/// The `'…'` a national literal `N'…'` opens with; `None` where `rest`
+/// opens with none.
+fn national(rest: &str) -> Option<&str> {
+    rest.strip_prefix(['N', 'n'])
+        .filter(|quoted| quoted.starts_with('\''))
+}
+
+/// What follows the `q'` or `nq'`, in any case, `rest` opens with: the
+/// opening delimiter and on; `None` where `rest` opens with neither.
+fn alternative(rest: &str) -> Option<&str> {
+    let rest = rest.strip_prefix(['N', 'n']).unwrap_or(rest);
+    rest.strip_prefix(['Q', 'q'])?.strip_prefix('\'')
+}
+
+/// The text between an alternative quote's delimiters, and what follows
+/// its closing quote; `None` where the delimiter is a space, a tab, a line
+/// end or a quote, or the literal never closes.
+fn alternatively(quoted: &str) -> Option<(String, &str)> {
+    let open = quoted.chars().next()?;
+    if matches!(open, ' ' | '\t' | '\r' | '\n' | '\'') {
+        return None;
+    }
+    let close = match open {
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        '(' => ')',
+        other => other,
+    };
+    let inner = &quoted[open.len_utf8()..];
+    let (end, _) = inner
+        .match_indices(close)
+        .find(|&(at, _)| inner[at + close.len_utf8()..].starts_with('\''))?;
+    let after = &inner[end + close.len_utf8() + 1..];
+    Some((inner[..end].to_string(), after))
 }
 
 #[cfg(test)]
@@ -99,8 +156,52 @@ mod tests {
     }
 
     #[test]
+    fn an_alternative_quote_is_read_to_its_closing_delimiter_and_quote() {
+        let read = |sql| ORACLE.read_literal(sql);
+        let text = |value: &str| Literal::Text(value.into());
+        assert_eq!(read("q'[it's :1]' rest"), Some((text("it's :1"), " rest")));
+        assert_eq!(read("Q'{a]'b}'"), Some((text("a]'b"), "")));
+        assert_eq!(read("nq'<x>'"), Some((text("x"), "")));
+        assert_eq!(read("NQ'(x)'"), Some((text("x"), "")));
+        assert_eq!(read("q'!it's!'"), Some((text("it's"), "")));
+        assert_eq!(read("q'#a#b#'"), Some((text("a#b"), "")));
+        assert_eq!(read("N'it''s'"), Some((text("it's"), "")));
+        assert_eq!(read("q'[open'"), None, "never closed");
+        assert_eq!(read("q' x '"), None, "a space delimits nothing");
+    }
+
+    #[test]
+    fn a_parameter_inside_an_alternative_quote_stays() {
+        // Read as a plain literal, `q'[it's :1]'` ended after `it` and the
+        // `:1` in its text was bound.
+        assert_eq!(
+            ORACLE.bound("UPDATE t SET note = q'[it's :1]' WHERE id = :1", "'7'"),
+            "UPDATE t SET note = q'[it's :1]' WHERE id = '7'"
+        );
+        assert_eq!(
+            ORACLE.bound("UPDATE t SET note = Nq'{:1}' WHERE id = :1", "'7'"),
+            "UPDATE t SET note = Nq'{:1}' WHERE id = '7'"
+        );
+        let open = "DELETE FROM t WHERE note = q'[open' AND id = :1";
+        assert_eq!(ORACLE.bound(open, "'7'"), open);
+        assert_eq!(
+            ORACLE.bound("SELECT a FROM t WHERE b IN'x' AND id = :1", "'7'"),
+            "SELECT a FROM t WHERE b IN'x' AND id = '7'",
+            "the N that ends a word opens no national literal"
+        );
+    }
+
+    #[test]
     fn an_insert_of_one_column_is_taken_apart() {
         let parse = |sql| ORACLE.parse_insert_literal(sql);
+        assert_eq!(
+            parse("INSERT INTO inbox (payload) VALUES (q'[it's]')"),
+            Some((
+                "inbox".into(),
+                "payload".into(),
+                Literal::Text("it's".into())
+            ))
+        );
         let text = |value: &str| Literal::Text(value.into());
         assert_eq!(
             parse("INSERT INTO \"INBOX\" (\"PAYLOAD\") VALUES ('it''s here')"),
