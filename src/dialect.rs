@@ -36,6 +36,11 @@ pub struct Dialect {
     pub(crate) bytes: fn(&[u8]) -> String,
     /// One literal at the start of a statement's text, and what follows.
     pub(crate) literal: fn(&str) -> Option<(Literal, &str)>,
+    /// Whether a statement's text opens a literal here — a quote, or a
+    /// prefix such as `PostgreSQL`'s `E'` and `$$` or Oracle's `q'` — so
+    /// one that never closes, or that `literal` refuses, keeps the rest of
+    /// the statement unbound rather than read as SQL.
+    pub(crate) opens: fn(&str) -> bool,
     /// The expression a SELECT names a binary column by, so the server
     /// answers it as text in the form `binary` reads.
     pub(crate) binary_column: fn(&str) -> String,

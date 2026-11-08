@@ -17,6 +17,7 @@ pub const SQLITE: Dialect = Dialect {
     text: standard::text,
     bytes: standard::bytes,
     literal: standard::literal,
+    opens: standard::opens,
     binary_column,
     binary,
     returning: Returning::Returning,

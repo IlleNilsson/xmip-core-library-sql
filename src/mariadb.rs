@@ -32,6 +32,7 @@ pub const MARIADB: Dialect = Dialect {
     text,
     bytes: standard::bytes,
     literal,
+    opens,
     binary_column,
     binary,
     returning: Returning::Separately,
@@ -63,6 +64,11 @@ fn text(text: &str) -> String {
     }
     out.push('\'');
     out
+}
+
+/// Whether `rest` opens a literal: `'` or `"`, both strings here.
+fn opens(rest: &str) -> bool {
+    rest.starts_with(['\'', '"'])
 }
 
 /// `CONCAT('0x', HEX(<column>))`: a BLOB spelled out in a hex form.

@@ -10,6 +10,7 @@ use codec::hex;
 use crate::delimiter::Delimiter;
 use crate::dialect::{Dialect, Returning};
 use crate::literal::Literal;
+use crate::standard;
 
 /// T-SQL.
 pub const TSQL: Dialect = Dialect {
@@ -20,6 +21,7 @@ pub const TSQL: Dialect = Dialect {
     text,
     bytes,
     literal,
+    opens: standard::opens,
     binary_column: str::to_string,
     binary,
     returning: Returning::Output,
