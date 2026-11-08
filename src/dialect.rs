@@ -27,6 +27,9 @@ pub struct Dialect {
     pub(crate) bare: &'static [char],
     /// The first parameter as a statement writes it: `$1`, `?`, `@P1`.
     pub(crate) marker: &'static str,
+    /// What opens a comment to the end of the line; `/* … */` is every
+    /// dialect's.
+    pub(crate) line_comments: &'static [&'static str],
     /// A text value as a string literal.
     pub(crate) text: fn(&str) -> String,
     /// Bytes as the literal a binary column stores as the bytes.

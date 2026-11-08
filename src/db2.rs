@@ -26,6 +26,7 @@ pub const DB2: Dialect = Dialect {
     identifier: Delimiter::IDENTIFIER,
     bare: &['_', '.'],
     marker: "?",
+    line_comments: &["--"],
     text,
     bytes,
     literal,
@@ -99,7 +100,10 @@ fn binary(text: &str) -> Option<Vec<u8>> {
 fn literal(rest: &str) -> Option<(Literal, &str)> {
     let (mut value, mut after) = piece(rest.trim_start())?;
     while let Some(next) = after.trim_start().strip_prefix("||") {
-        let (more, tail) = piece(next.trim_start())?;
+        // A `||` to what is not a constant ends the literal before it.
+        let Some((more, tail)) = piece(next.trim_start()) else {
+            break;
+        };
         value = match (value, more) {
             (Literal::Text(mut text), Literal::Text(more)) => {
                 text.push_str(&more);
@@ -180,6 +184,11 @@ mod tests {
         assert_eq!(DB2.read_literal(&written), Some((Literal::Text(long), "")));
         assert_eq!(DB2.read_literal("'a' || BX'00'"), None, "text and bytes");
         assert_eq!(DB2.read_literal("CLOB('a'"), None, "never closed");
+        assert_eq!(
+            DB2.read_literal("'a' || ?"),
+            Some((Literal::Text("a".into()), " || ?")),
+            "a parameter after || is not the literal's"
+        );
     }
 
     #[test]
