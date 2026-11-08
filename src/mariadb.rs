@@ -1,11 +1,20 @@
 //! `MariaDB`: identifiers in backticks with a backtick doubled, or bare with
-//! `_ .` in them; `'…'` literals with the backslash escapes the server reads
-//! unless `NO_BACKSLASH_ESCAPES` is on; bytes as the hexadecimal literal
-//! `X'…'` a BLOB or VARBINARY column stores as the bytes. Over the text
-//! protocol a BLOB comes back raw, which is not text, so a SELECT spells it
-//! out — `CONCAT('0x', HEX(payload))` — and the answer must be in a hex
-//! form, `X'…'` or `0x…`. `?` for a parameter; the INSERT answers no row,
-//! and a new row's id is asked for after it.
+//! `_ .` in them; `'…'` and `"…"` literals, a quote in them doubled; bytes as
+//! the hexadecimal literal `X'…'` a BLOB or VARBINARY column stores as the
+//! bytes. Over the text protocol a BLOB comes back raw, which is not text, so
+//! a SELECT spells it out — `CONCAT('0x', HEX(payload))` — and the answer
+//! must be in a hex form, `X'…'` or `0x…`. `?` for a parameter; the INSERT
+//! answers no row, and a new row's id is asked for after it. `#` opens a
+//! comment to the end of the line, as `--` does.
+//!
+//! A backslash is an escape unless the session's `sql_mode` holds
+//! `NO_BACKSLASH_ESCAPES`, so it is the one character two modes write
+//! differently: [`MARIADB`] writes it `\\`, the server's default, and
+//! [`MARIADB_NO_BACKSLASH_ESCAPES`] as itself. The server says which mode
+//! is on: `SERVER_STATUS_NO_BACKSLASH_ESCAPES`, bit `0x0200` of the status
+//! flags its handshake and every OK packet carry, which is what to choose
+//! the dialect by. A quote is written `''` in both, never `\'`, so a literal
+//! is closed where both modes close it and no mode reads past it.
 
 use codec::hex;
 
@@ -14,11 +23,12 @@ use crate::dialect::{Dialect, Returning};
 use crate::literal::Literal;
 use crate::standard;
 
-/// `MariaDB`.
+/// `MariaDB` with backslash escapes, the server's default `sql_mode`.
 pub const MARIADB: Dialect = Dialect {
     identifier: Delimiter::BACKTICK,
     bare: &['_', '.'],
     marker: "?",
+    line_comments: &["--", "#"],
     text,
     bytes: standard::bytes,
     literal,
@@ -27,14 +37,22 @@ pub const MARIADB: Dialect = Dialect {
     returning: Returning::Separately,
 };
 
-/// `text` as a string literal: quoted, a quote, a backslash, a NUL and the
-/// line ends each written as its escape.
+/// `MariaDB` where the session's `sql_mode` holds `NO_BACKSLASH_ESCAPES`:
+/// a backslash is itself, and only a doubled quote is an escape.
+pub const MARIADB_NO_BACKSLASH_ESCAPES: Dialect = Dialect {
+    text: standard::text,
+    literal: literal_plain,
+    ..MARIADB
+};
+
+/// `text` as a string literal: quoted, a quote doubled, and a backslash, a
+/// NUL and the line ends each written as its escape.
 fn text(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('\'');
     for c in text.chars() {
         match c {
-            '\'' => out.push_str("\\'"),
+            '\'' => out.push_str("''"),
             '\\' => out.push_str("\\\\"),
             '\0' => out.push_str("\\0"),
             '\n' => out.push_str("\\n"),
@@ -62,44 +80,54 @@ fn binary(text: &str) -> Option<Vec<u8>> {
     hex::decode(digits).ok()
 }
 
-/// One literal — `'…'` with backslash escapes, or `X'…'` — and what
-/// follows it: the escapes the server would undo, undone.
+/// One literal with backslash escapes, the escapes undone.
 fn literal(rest: &str) -> Option<(Literal, &str)> {
+    read(rest, true)
+}
+
+/// One literal without backslash escapes.
+fn literal_plain(rest: &str) -> Option<(Literal, &str)> {
+    read(rest, false)
+}
+
+/// One literal — `'…'`, `"…"` or `X'…'` — and what follows it: the escapes
+/// the server would undo, undone, a backslash one among them where
+/// `backslash` says the mode reads it.
+fn read(rest: &str, backslash: bool) -> Option<(Literal, &str)> {
     if rest.starts_with("X'") || rest.starts_with("x'") {
         let end = rest[2..].find('\'')? + 3;
         let bytes = binary(&rest[..end])?;
         return Some((Literal::Bytes(bytes), &rest[end..]));
     }
-    let mut chars = rest.strip_prefix('\'')?.char_indices().peekable();
+    let quote = rest.chars().next().filter(|c| matches!(c, '\'' | '"'))?;
+    let mut chars = rest[1..].char_indices().peekable();
     let mut value = String::new();
     loop {
         let (at, c) = chars.next()?;
         match c {
-            '\'' if chars.peek().is_some_and(|(_, next)| *next == '\'') => {
+            c if c == quote && chars.peek().is_some_and(|(_, next)| *next == quote) => {
                 chars.next();
-                value.push('\'');
+                value.push(quote);
             }
-            '\'' => return Some((Literal::Text(value), &rest[at + 2..])),
-            '\\' => {
-                let escaped = chars.next()?.1;
-                let unescaped = match escaped {
-                    '0' => '\0',
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    'b' => '\u{8}',
-                    'Z' => '\u{1a}',
-                    // A LIKE wildcard keeps its backslash, as the server keeps it.
-                    '%' | '_' => {
-                        value.push('\\');
-                        escaped
-                    }
-                    other => other,
-                };
-                value.push(unescaped);
-            }
+            c if c == quote => return Some((Literal::Text(value), &rest[at + 2..])),
+            '\\' if backslash => value.push_str(&unescape(chars.next()?.1)),
             other => value.push(other),
         }
+    }
+}
+
+/// What the server makes of a backslash and `escaped`.
+fn unescape(escaped: char) -> String {
+    match escaped {
+        '0' => "\0".into(),
+        'n' => "\n".into(),
+        'r' => "\r".into(),
+        't' => "\t".into(),
+        'b' => "\u{8}".into(),
+        'Z' => "\u{1a}".into(),
+        // A LIKE wildcard keeps its backslash, as the server keeps it.
+        '%' | '_' => format!("\\{escaped}"),
+        other => other.to_string(),
     }
 }
 
@@ -132,11 +160,37 @@ mod tests {
 
     #[test]
     fn a_literal_escapes_what_the_server_unescapes() {
-        assert_eq!(MARIADB.quote_text("it's"), "'it\\'s'");
+        assert_eq!(MARIADB.quote_text("it's"), "'it''s'");
         assert_eq!(MARIADB.quote_text("back\\slash"), "'back\\\\slash'");
         assert_eq!(MARIADB.quote_text("a\nb\r\0\u{1a}"), "'a\\nb\\r\\0\\Z'");
         assert_eq!(MARIADB.quote_text(""), "''");
         assert_eq!(MARIADB.quote_identifier("in`box"), "`in``box`");
+    }
+
+    #[test]
+    fn a_hostile_quote_closes_nowhere_in_either_mode() {
+        // Under NO_BACKSLASH_ESCAPES the old `\'` closed the literal after
+        // the backslash and ran the rest as SQL.
+        let hostile = "x\\'; DROP TABLE inbox; -- ";
+        for dialect in [MARIADB, MARIADB_NO_BACKSLASH_ESCAPES] {
+            let quoted = dialect.quote_text(hostile);
+            assert_eq!(
+                dialect.read_literal(&format!("{quoted} rest")),
+                Some((Literal::Text(hostile.into()), " rest")),
+                "{quoted}"
+            );
+        }
+        let plain = MARIADB_NO_BACKSLASH_ESCAPES.quote_text(hostile);
+        assert_eq!(plain, "'x\\''; DROP TABLE inbox; -- '");
+        assert_eq!(
+            MARIADB_NO_BACKSLASH_ESCAPES.read_literal("'a\\' rest"),
+            Some((text("a\\"), " rest")),
+            "a backslash is itself"
+        );
+        assert_eq!(
+            MARIADB.read_literal("\"say \"\"hi\\\"\" rest"),
+            Some((text("say \"hi\""), " rest"))
+        );
     }
 
     #[test]

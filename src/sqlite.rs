@@ -13,6 +13,7 @@ pub const SQLITE: Dialect = Dialect {
     identifier: Delimiter::IDENTIFIER,
     bare: &['_', '.'],
     marker: "?",
+    line_comments: &["--"],
     text: standard::text,
     bytes: standard::bytes,
     literal: standard::literal,

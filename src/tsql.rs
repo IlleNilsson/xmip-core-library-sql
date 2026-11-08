@@ -16,6 +16,7 @@ pub const TSQL: Dialect = Dialect {
     identifier: Delimiter::BRACKET,
     bare: &['_', '.', '#', '@'],
     marker: "@P1",
+    line_comments: &["--"],
     text,
     bytes,
     literal,

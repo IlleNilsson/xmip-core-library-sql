@@ -16,7 +16,7 @@
 //!   standard.rs     STANDARD: ISO SQL, a script any database loads
 //!   tsql.rs         TSQL: SQL Server
 //!   postgresql.rs   POSTGRESQL
-//!   mariadb.rs      MARIADB
+//!   mariadb.rs      MARIADB, MARIADB_NO_BACKSLASH_ESCAPES
 //!   oracle.rs       ORACLE: Oracle Database
 //!   db2.rs          DB2: IBM DB2
 //!   sqlite.rs       SQLITE
@@ -45,7 +45,7 @@ pub use db2::DB2;
 pub use delimiter::Delimiter;
 pub use dialect::{Dialect, Returning};
 pub use literal::Literal;
-pub use mariadb::MARIADB;
+pub use mariadb::{MARIADB, MARIADB_NO_BACKSLASH_ESCAPES};
 pub use oracle::ORACLE;
 pub use postgresql::POSTGRESQL;
 pub use sqlite::SQLITE;

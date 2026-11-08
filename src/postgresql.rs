@@ -17,6 +17,7 @@ pub const POSTGRESQL: Dialect = Dialect {
     identifier: Delimiter::IDENTIFIER,
     bare: &['_', '.'],
     marker: "$1",
+    line_comments: &["--"],
     text: standard::text,
     bytes,
     literal,

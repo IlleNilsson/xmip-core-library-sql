@@ -14,6 +14,7 @@ pub const STANDARD: Dialect = Dialect {
     identifier: Delimiter::IDENTIFIER,
     bare: &['_', '.'],
     marker: "?",
+    line_comments: &["--"],
     text,
     bytes,
     literal,
